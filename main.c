@@ -12,22 +12,22 @@
 #include <fcntl.h>
 #include <dirent.h>
 
+#include "common.h"
 #include "utils.h"
+#include "log.h"
+#include "args.h"
 
 
+#define DEV_EVENT_DIR   "/dev/input"
+#define NAME_FILTER     "event"
 
-#define DEV_INPUT_EVENT "/dev/input"
-#define EVENT_DEV_NAME  "event"
 
-#define MAX_MOUSE_DEVS 10
+#define EV_TYPE_BYTE_MAX    EV_CNT/8   //  0x1f+1 = 32;    32/8 = 4 byte;
+#define EV_KEY__BYTE_MAX    KEY_CNT/8   // 0x2ff+1 = 768;  768/8 = 96 byte;
+#define EV_LED__BYTE_MAX    LED_CNT/8   // 0x0f+1 = 16;    16/8 = 2 byte;
 
-enum {
-    MAX_WIDTH  = 1024,
-    MAX_HEIGHT = 768,
-    VALUE_PRESSED  = 1,
-    VALUE_RELEASED = 0,
-};
 
+char* LED_state[] = {"OFF", "ON"};
 
 
 /**
@@ -38,140 +38,151 @@ enum {
  * @return Non-zero if the given directory entry starts with "event", or zero
  * otherwise.
  */
-static int is_event_device(const struct dirent *dir) {
-    return strncmp(EVENT_DEV_NAME, dir->d_name, 5) == 0;
+static int name_filter(const struct dirent *dir) {
+    return strncmp(NAME_FILTER, dir->d_name, 5) == 0;
 }
 
 
+static int bit_check_in_bitarr(uint8_t* byte_arr, uint32_t bit_num) {
 
-/*
- * Search 'event*' files in '/dev/input/' directory
- * and test witch one is Mouse devices
- *
- * Output: array of strings with records:
- * '/dev/input/event5'
- * '/dev/input/event22'
- */
-int find_mouse_dev(char *ev_name[], int ev_name_max)
+    return BIT_CHECK(byte_arr[bit_num/8], bit_num%8);
+}
+
+//--------------//--------------//--------------//--------------//
+int has_device_LED(int fd, int led_name)
 {
-    struct dirent **namelist;
-    int iter;
-    int ndev;
-    int ev_name_iter = 0;
-    int retval = -1;
+    uint8_t ev_type_bitarr[EV_TYPE_BYTE_MAX];
+    uint8_t ev_led__bitarr[EV_LED__BYTE_MAX];
 
-    uint32_t ev_type;
-    uint8_t ev_code[KEY_MAX/8 + 1];
+    int retval = 0;
 
-    ndev = scandir(DEV_INPUT_EVENT, &namelist, is_event_device, versionsort);
-    if (ndev <= 0)
+
+    if (ioctl(fd, EVIOCGBIT(0, sizeof(ev_type_bitarr)), ev_type_bitarr) < 0) {
+        perror("evdev ioctl(EVIOCGBIT:0)");
         return -1;
-
-    for (iter = 0; iter < ndev; iter++) {
-        char fname[64];
-        int fd = -1;
-
-        snprintf(fname, sizeof(fname), "%s/%s", DEV_INPUT_EVENT, namelist[iter]->d_name);
-        printf("Check device: %s \n", fname);
-        fd = open(fname, O_RDONLY);
-        if (fd < 0) {
-            printf("--- 0 --- \n");
-            continue;
-        }
-
-
-        printf("--- 1 --- \n");
-        if (ioctl(fd, EVIOCGBIT(0, sizeof(ev_type)), &ev_type) < 0) {
-            perror("evdev ioctl(EVIOCGBIT)");
-            retval = -1;
-            goto out;
-        }
-
-        printf("--- 2 --- \n");
-        if( BIT_CHECK(ev_type, EV_KEY) ) {
-            memset(ev_code, 0, sizeof(ev_code));
-
-            if( ioctl(fd, EVIOCGBIT(EV_KEY, (KEY_MAX/8+1)), ev_code) < 0 ) {
-                perror("evdev ioctl(EVIOCGBIT) ");
-                retval = -1;
-                goto out;
-            }
-
-            // BTN_MOUSE = 0x110 == 272, so we have to check bit #272 (34 * 8 = 272)
-            if( BIT_CHECK( *(ev_code + 34), 0) )
-            {
-                sprintf(ev_name[ev_name_iter], fname);
-                retval = ++ev_name_iter;
-
-                if( ev_name_iter == ev_name_max ) {
-                    close(fd);
-                    goto out;
-                }
-            }
-        }
-
-        close(fd);
     }
 
 
-    out:
-    for (iter = 0; iter < ndev; iter++)
-        free(namelist[iter]);
-    free(namelist);
+    if( bit_check_in_bitarr(ev_type_bitarr, EV_LED) ) {
+        printf("\t...EV_LED device found!!! \n");
+        memset(ev_led__bitarr, 0, sizeof(ev_led__bitarr));
+
+
+        if( ioctl(fd, EVIOCGBIT(EV_LED, sizeof(ev_led__bitarr)), ev_led__bitarr) < 0 ) {
+            perror("evdev ioctl(EVIOCGBIT:EV_KEY) ");
+            retval = -1;
+        }
+
+        if( bit_check_in_bitarr(ev_led__bitarr, led_name) ) {
+            printf("\t...'%d' device found!!! \n", led_name);
+            retval = 1;
+        }
+    }
 
     return retval;
 }
 
+int set_LED(int fd, int led_name, int set_to_state) {
 
+    uint8_t ev_led__bitarr[EV_LED__BYTE_MAX];
+    int curr_state;
+    struct input_event ev; /* the event */
 
-/*
- * Set file descriptors for mouse devices
- * '/dev/input/event5'  ==> 4
- * '/dev/input/event22' ==> 5
- *
- * Output: Number of mouse file descriptors
- *
- */
-int mouse_open_dev(int *fd_arr) {
-    int iter;
-    int opened_n_mouse = 0;
+    // get current LED state
+    {
+        ioctl(fd, EVIOCGLED(sizeof(ev_led__bitarr)), ev_led__bitarr);
 
-    // allocate space for N pointers to strings
-    char **strings = (char**)malloc(MAX_MOUSE_DEVS * sizeof(char*));
-    //char *strings[MAX_MOUSE_EVS];
-
-    //allocate space for each string
-    for(iter = 0; iter < MAX_MOUSE_DEVS; iter++)
-        strings[iter] = (char*)malloc(256 * sizeof(char));
-
-    int ret = find_mouse_dev(strings, MAX_MOUSE_DEVS);
-    if( ret < 1 ) {
-        printf("Mouse device not found! \n");
-        exit(-1);
+        curr_state = bit_check_in_bitarr(ev_led__bitarr, led_name);
+        printf("\t...current state '%d' is '%s' \n", led_name, LED_state[curr_state]);
     }
 
-    printf("Find mouse events: \n");
-    for( iter = 0; iter < ret; iter++ ) {
-        fd_arr[iter] = open(strings[iter], O_RDONLY);
-        opened_n_mouse++;
 
-        printf("   %s [fd: %d] \n", strings[iter], fd_arr[iter] );
+    if (curr_state != set_to_state) {
+        ev.type = EV_KEY;
+        ev.code = KEY_CAPSLOCK;
+        ev.value = 1;
+        write(fd, &ev, sizeof(struct input_event));
 
-        free(strings[iter]);
+        ev.type = EV_KEY;
+        ev.code = KEY_CAPSLOCK;
+        ev.value = 0;
+        write(fd, &ev, sizeof(struct input_event));
+
+        if (set_to_state == SET_ON) {
+            ev.type = EV_LED;
+            ev.code = led_name;
+            ev.value = 1;
+            write(fd, &ev, sizeof(struct input_event));
+        } else {
+            ev.type = EV_LED;
+            ev.code = led_name;
+            ev.value = 0;
+            write(fd, &ev, sizeof(struct input_event));
+        }
     }
-    free(strings);
 
+    // get current LED state again
+    {
+        ioctl(fd, EVIOCGLED(sizeof(ev_led__bitarr)), ev_led__bitarr);
 
-    return opened_n_mouse;
+        curr_state = bit_check_in_bitarr(ev_led__bitarr, led_name);
+        printf("\t.....new state '%d' is '%s' \n", led_name, LED_state[curr_state]);
+    }
+
+    return 0;
 }
 
-int main() {
-    int mouse_fd;
-    int mouse_fd_n;
-
-    mouse_fd_n = mouse_open_dev(&mouse_fd);
 
 
+int main(int argc, char **argv) {
+    // Массив, содержащий список файлов в директории
+    struct dirent **namelist;
+    struct Args_inst args_I ;
+    MEMZERO(args_I);
+
+    int retcode = 0;
+    int dev_n;
+    int idx;
+    char file_long_name[1024];
+    int kbd_fd;
+
+    int led_caps_present;
+    int key_caps_present;
+
+    pars_args(argc, argv, &args_I);
+
+
+    dev_n = scandir(DEV_EVENT_DIR, &namelist, name_filter, versionsort);
+    if (dev_n <= 0) {
+        retcode = -1;
+        goto out;
+    }
+
+    for (idx = 0; idx < dev_n; idx++) {
+        snprintf(file_long_name, sizeof(file_long_name), "%s/%s", DEV_EVENT_DIR, namelist[idx]->d_name);
+        printf("Check device: %s \n", file_long_name);
+
+        kbd_fd = open(file_long_name, O_RDWR);
+        if (kbd_fd < 0) {
+            retcode = -1;
+            goto out;
+        }
+
+        led_caps_present = has_device_LED(kbd_fd, LED_CAPSL);
+
+        if (led_caps_present == 1) {
+            set_LED(kbd_fd, LED_CAPSL, SET_ON);
+        }
+    }
+
+
+
+    out:
+    for (idx = 0; idx < dev_n; idx++)
+        free(namelist[idx]);
+    free(namelist);
+
+    return retcode;
 }
 
 

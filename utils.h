@@ -5,6 +5,8 @@
 #define BIT_FLIP(a,b) ((a) ^= (1ULL<<(b)))
 #define BIT_CHECK(a,b) (!!((a) & (1ULL<<(b))))        // '!!' to make sure this returns 0 or 1
 
+#define MEMZERO(x)	memset(&(x), 0, sizeof (x));
+
 
 /** Convert line to hex  */
 void mem2hex(int cond, unsigned char *str, int len, int colum_counts);

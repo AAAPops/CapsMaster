@@ -21,10 +21,11 @@ int main(int argc, char *argv[])
     int fd;
     int retval;
 
+    //fd = open("//dev/input/event8", O_RDWR );
     fd = open("/dev/input/event21", O_RDWR );
-    char kbname [256] = "key-x123";
-    char LedStatus = 0;
-
+    //char kbname [256] = "key-x123";
+    //char LedStatus = 0;
+    /*
     ioctl (fd, EVIOCGNAME (sizeof (kbname)), kbname);
     printf("kbname: %s \n", kbname);
 
@@ -33,18 +34,39 @@ int main(int argc, char *argv[])
 
     ioctl (fd, EVIOCGLED (sizeof (LedStatus)), &LedStatus);
     printf("LedStatus: %d \n", LedStatus);
-
+    */
     struct input_event ev; /* the event */
 
 /* we turn off all the LEDs to start */
-    ev.type = EV_LED;
-    ev.code = LED_NUML;
+
+    //ev.type = EV_LED;
+    //ev.code = LED_CAPSL;
+    //ev.value = 0;
+    //write(fd, &ev, sizeof(struct input_event));
+
+    ev.type = EV_KEY;
+    ev.code = KEY_CAPSLOCK;
+    ev.value = 1;
+    write(fd, &ev, sizeof(struct input_event));
+
+    ev.type = EV_KEY;
+    ev.code = KEY_CAPSLOCK;
     ev.value = 0;
-    retval = write(fd, &ev, sizeof(struct input_event));
+    write(fd, &ev, sizeof(struct input_event));
+
+    ev.type = EV_LED;
+    ev.code = LED_CAPSL;
+    ev.value = 1;
+    write(fd, &ev, sizeof(struct input_event));
+
+
+    /*
     ev.code = LED_NUML;
     retval = write(fd, &ev, sizeof(struct input_event));
     ev.code = LED_SCROLLL;
     retval = write(fd, &ev, sizeof(struct input_event));
+    */
 
+    close(fd);
 }
 

@@ -3,6 +3,8 @@ project(kbdtool C)
 
 set(CMAKE_C_STANDARD 99)
 
-add_executable(kbdtool main.c)
+add_definitions(-DLOG_USE_COLOR)
+
+add_executable(lockmaster main.c args.c log.c common.h)
 
 add_executable(tst-1 tst-1.c)
