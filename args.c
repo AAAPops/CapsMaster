@@ -37,33 +37,15 @@ void usage(char* file_name) {
 }
 
 
-void pars_args(int argc, char **argv, struct Args_inst *Args_i)
+void pars_args(int argc, char **argv, int* show_info,
+               struct VirtLed *Caps_inst, struct VirtLed *Num_inst, struct VirtLed *Scroll_inst)
 {
-    char* LED_state[] = {"OFF", "ON"};
-
-    int loglevel = LOG_FATAL;
-    log_set_level(loglevel);
+    int loglevel;
 
     if( argc == 1 ) {
         usage(argv[0]);
         exit(0);
     }
-
-    //----->> Set defaults  <<-----//
-    Args_i->capsLed = -1;
-    Args_i->capsKey = -1;
-    Args_i->capsState = SET_OFF;
-
-    Args_i->numLed = -1;
-    Args_i->numKey = -1;
-    Args_i->numState = SET_OFF;
-
-    Args_i->scrollLed = -1;
-    Args_i->scrollKey = -1;
-    Args_i->scrollState = SET_OFF;
-
-    Args_i->info = -1;
-    //----->> Set defaults  <<-----//
 
     for (;;) {
         int idx;
@@ -78,28 +60,32 @@ void pars_args(int argc, char **argv, struct Args_inst *Args_i)
                 break;
 
             case 'i':
+                *show_info = 1;
                 log_trace("Show LEDs info on all keyboards");
                 break;
 
             case 'c':
-                Args_i->capsLed = LED_CAPSL;
-                Args_i->capsKey = KEY_CAPSLOCK;
+                Caps_inst->inWork = 1;
                 if (strcmp(optarg, "on") == 0 )
-                    Args_i->capsState = SET_ON ;
+                    Caps_inst->newState = SET_ON;
+                else
+                    Caps_inst->newState = SET_OFF;
                 break;
 
             case 'n':
-                Args_i->numLed = LED_NUML;
-                Args_i->numKey = KEY_NUMLOCK;
+                Num_inst->inWork = 1;
                 if (strcmp(optarg, "on") == 0 )
-                    Args_i->numState = SET_ON ;
+                    Num_inst->newState = SET_ON;
+                else
+                    Num_inst->newState = SET_OFF;
                 break;
 
             case 's':
-                Args_i->scrollLed = LED_SCROLLL;
-                Args_i->scrollKey = KEY_SCROLLLOCK;
+                Scroll_inst->inWork = 1;
                 if (strcmp(optarg, "on") == 0 )
-                    Args_i->scrollState = SET_ON ;
+                    Scroll_inst->newState = SET_ON;
+                else
+                    Scroll_inst->newState = SET_OFF;
                 break;
 
             case 'D':
@@ -117,13 +103,4 @@ void pars_args(int argc, char **argv, struct Args_inst *Args_i)
                 exit(0);
         }
     }
-
-    if (Args_i->capsLed >= 0)
-        log_trace("Set CapsLock LED: %s", LED_state[Args_i->capsState]);
-
-    if (Args_i->numLed >= 0)
-        log_trace("Set NumLock LED: %s", LED_state[Args_i->numState]);
-
-    if (Args_i->scrollLed >= 0)
-        log_trace("Set ScrollLock LED: %s", LED_state[Args_i->scrollState]);
 }

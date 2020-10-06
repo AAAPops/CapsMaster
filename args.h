@@ -8,7 +8,8 @@
 #include "common.h"
 
 
-void pars_args(int argc, char **argv, struct Args_inst *Args_i);
+void pars_args(int argc, char **argv, int* show_info,
+               struct VirtLed *Caps_inst, struct VirtLed *Num_inst, struct VirtLed *Scroll_inst);
 
 
 #endif

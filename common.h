@@ -8,20 +8,19 @@
 #define SET_OFF 0
 #define SET_ON  1
 
-struct Args_inst {
-    int     capsLed;
-    int     capsKey;
-    int     capsState;
+struct VirtLed {
+    int     inWork;
+    int     presentOnKbd;
 
-    int     numLed;
-    int     numKey;
-    int     numState;
+    int     Led_val;
+    char    Led_str[16];
 
-    int     scrollLed;
-    int     scrollKey;
-    int     scrollState;
+    int     Key_val;
+    char    Key_str[16];
 
-    int     info;
+    int     currState;
+    int     newState;
+
 };
 
 #endif //COMMON_H
