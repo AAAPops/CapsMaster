@@ -5,12 +5,15 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define SET_OFF 0
-#define SET_ON  1
+#define VERSION "0.0.1a"
+
+#define SET_OFF   0
+#define SET_ON    1
+#define NOT_DEF  -1
 
 struct VirtLed {
-    int     inWork;
-    int     presentOnKbd;
+    //int     inWork;
+    //int     presentOnKbd;
 
     int     Led_val;
     char    Led_str[16];
@@ -18,9 +21,11 @@ struct VirtLed {
     int     Key_val;
     char    Key_str[16];
 
-    int     currState;
+    //int     currState;
     int     newState;
 
 };
+
+int loglevel;
 
 #endif //COMMON_H

@@ -7,4 +7,4 @@ add_definitions(-DLOG_USE_COLOR)
 
 add_executable(lockmaster main.c args.c log.c common.h)
 
-add_executable(tst-1 tst-1.c)
+#add_executable(tst-1 tst-1.c)

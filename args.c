@@ -3,12 +3,12 @@
 #include <stdlib.h>
 #include <linux/input.h>
 
-#include "log.h"
 #include "args.h"
+#include "log.h"
+#include "common.h"
 
-#define VERSION "0.0.1a"
-
-const char short_options[] = "hic:n:s:D:";
+//const char short_options[] = "hic:n:s:d:";
+const char short_options[] = "d:";
 
 const struct option
         long_options[] = {
@@ -17,7 +17,7 @@ const struct option
         { "capslock",    required_argument, NULL, 'c' },
         { "numlock",     required_argument, NULL, 'n' },
         { "scrolllock",  required_argument, NULL, 's' },
-        { "debug",       required_argument, NULL, 'D' },
+        { "debug",       required_argument, NULL, 'd' },
         { 0, 0, 0, 0 }
 };
 
@@ -28,20 +28,18 @@ void usage(char* file_name) {
                     " [--info] [--debug] \n\n",  file_name);
 
     fprintf(stderr,"Options: \n");
-    fprintf(stderr, "\t --info          Info about all LEDs on all keyboards \n");
-    fprintf(stderr, "\t --capslock      Set CapsLock LED  \n");
-    fprintf(stderr, "\t --numlock       Set NumLock LED \n");
-    fprintf(stderr, "\t --scrolllock    Set ScrollLock LED \n");
-    fprintf(stderr, "\t --help          Print this message \n");
-    fprintf(stderr, "\t --debug         Debug level [0..6] \n");
+    fprintf(stderr, "    --info          Info about all LEDs on all keyboards \n");
+    fprintf(stderr, "    --capslock      Set CapsLock LED  \n");
+    fprintf(stderr, "    --numlock       Set NumLock LED \n");
+    fprintf(stderr, "    --scrolllock    Set ScrollLock LED \n");
+    fprintf(stderr, "    --help          Print this message \n");
+    fprintf(stderr, " -d|--debug         Debug level [0, 2, 5] \n");
 }
 
 
 void pars_args(int argc, char **argv, int* show_info,
-               struct VirtLed *Caps_inst, struct VirtLed *Num_inst, struct VirtLed *Scroll_inst)
+               struct VirtLed *CapsInst, struct VirtLed *NumInst, struct VirtLed *ScrollInst)
 {
-    int loglevel;
-
     if( argc == 1 ) {
         usage(argv[0]);
         exit(0);
@@ -61,34 +59,30 @@ void pars_args(int argc, char **argv, int* show_info,
 
             case 'i':
                 *show_info = 1;
-                log_trace("Show LEDs info on all keyboards");
                 break;
 
             case 'c':
-                Caps_inst->inWork = 1;
                 if (strcmp(optarg, "on") == 0 )
-                    Caps_inst->newState = SET_ON;
+                    CapsInst->newState = SET_ON;
                 else
-                    Caps_inst->newState = SET_OFF;
+                    CapsInst->newState = SET_OFF;
                 break;
 
             case 'n':
-                Num_inst->inWork = 1;
                 if (strcmp(optarg, "on") == 0 )
-                    Num_inst->newState = SET_ON;
+                    NumInst->newState = SET_ON;
                 else
-                    Num_inst->newState = SET_OFF;
+                    NumInst->newState = SET_OFF;
                 break;
 
             case 's':
-                Scroll_inst->inWork = 1;
                 if (strcmp(optarg, "on") == 0 )
-                    Scroll_inst->newState = SET_ON;
+                    ScrollInst->newState = SET_ON;
                 else
-                    Scroll_inst->newState = SET_OFF;
+                    ScrollInst->newState = SET_OFF;
                 break;
 
-            case 'D':
+            case 'd':
                 loglevel = (int) strtol(optarg, NULL, 10);
                 if( loglevel < LOG_TRACE || loglevel > LOG_FATAL ) {
                     log_fatal("A problem with parameter '--debug'");
