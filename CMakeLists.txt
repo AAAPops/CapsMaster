@@ -5,4 +5,4 @@ set(CMAKE_C_STANDARD 99)
 
 add_definitions(-DLOG_USE_COLOR)
 
-add_executable(lockmaster main.c args.c log.c common.h)
+add_executable(capsmaster main.c args.c log.c common.h)
