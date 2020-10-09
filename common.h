@@ -5,7 +5,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#define VERSION "0.0.1a"
+#define VERSION "0.0.3"
 
 #define SET_OFF   0
 #define SET_ON    1

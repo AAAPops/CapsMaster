@@ -7,7 +7,6 @@
 
 #include <linux/input.h>
 
-#include <stdint.h>
 #include <string.h>
 #include <fcntl.h>
 #include <dirent.h>
@@ -94,41 +93,38 @@ int is_LED_on_kbd(int fd, int led_val, char* led_name)
 }
 
 
+int press_Key(int fd, int key_val, char* key_name) {
+
+    struct input_event ev;
+
+    ev.type = EV_KEY;
+    ev.code = key_val;
+    ev.value = 1;
+    write(fd, &ev, sizeof(struct input_event));
+
+    ev.type = EV_KEY;
+    ev.code = key_val;
+    ev.value = 0;
+    write(fd, &ev, sizeof(struct input_event));
+
+    log_info("Key %s pressed", key_name);
+
+    return 0;
+}
+
+
 //--------------//--------------//--------------//--------------//
-int set_LED(int fd, struct VirtLed *VirtLedInst) {
+int set_LED(int fd, int led_val, char* led_name, int led_state) {
 
     int curr_state;
     struct input_event ev;
 
-    // get current LED state
-    if ( !is_LED_on_kbd(fd, VirtLedInst->Led_val, VirtLedInst->Led_str) )
-        return -1;
+    ev.type = EV_LED;
+    ev.code = led_val;
+    ev.value = led_state;
+    write(fd, &ev, sizeof(struct input_event));
 
-    curr_state = get_LED_state(fd, VirtLedInst->Led_val, VirtLedInst->Led_str);
-
-    if (curr_state != VirtLedInst->newState) {
-        ev.type = EV_KEY;
-        ev.code = VirtLedInst->Key_val;
-        ev.value = 1;
-        write(fd, &ev, sizeof(struct input_event));
-
-        ev.type = EV_KEY;
-        ev.code = VirtLedInst->Key_val;
-        ev.value = 0;
-        write(fd, &ev, sizeof(struct input_event));
-
-        if (VirtLedInst->newState == SET_ON) {
-            ev.type = EV_LED;
-            ev.code = VirtLedInst->Led_val;
-            ev.value = SET_ON;
-            write(fd, &ev, sizeof(struct input_event));
-        } else {
-            ev.type = EV_LED;
-            ev.code = VirtLedInst->Led_val;
-            ev.value = SET_OFF;
-            write(fd, &ev, sizeof(struct input_event));
-        }
-    }
+    log_info("Led %s set to '%s'", led_name, LED_state[led_state]);
 
     return 0;
 }
@@ -243,14 +239,14 @@ int main(int argc, char **argv) {
     pars_args(argc, argv, &show_kbd_info, &Caps, &Num, &Scroll);
 
     if (Caps.newState != NOT_DEF)
-        log_info("Set %s LED to: %s", Caps.Led_str, LED_state[Caps.newState]);
+        log_info("app option: Set %s LED to '%s'", Caps.Led_str, LED_state[Caps.newState]);
     if (Num.newState != NOT_DEF)
-        log_info("Set %s LED to: %s", Num.Led_str, LED_state[Num.newState]);
+        log_info("app option: Set %s LED to '%s'", Num.Led_str, LED_state[Num.newState]);
     if (Scroll.newState != NOT_DEF)
-        log_info("Set %s LED to: %s", Scroll.Led_str, LED_state[Scroll.newState]);
+        log_info("app option: Set %s LED to '%s'", Scroll.Led_str, LED_state[Scroll.newState]);
     if (show_kbd_info == 1) {
         log_set_level(LOG_INFO);
-        log_info("Find '--info' route", show_kbd_info);
+        log_info("app option: '--info' route", show_kbd_info);
     }
     //------------------------------------------
 
@@ -276,24 +272,65 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+
     /* Set LED as user wish */
-    for (int idx=0; idx < kbd_in_system; idx++) {
-        if (loglevel < LOG_FATAL) {
-            log_info("Before set LED...");
-            show_kbd_curr_state(kbd_fd_arr[idx], &Caps, &Num, &Scroll);
+    log_info("---");
+    for (int idx=0; idx < 1; idx++)
+    {
+        int curr_state;
+
+        curr_state = get_LED_state(kbd_fd_arr[idx], Caps.Led_val, Caps.Led_str);
+        if (Caps.newState == NOT_DEF)
+            Caps.newState = curr_state;
+
+        if (curr_state != Caps.newState) {
+            press_Key(kbd_fd_arr[idx], Caps.Key_val, Caps.Key_str);
+        } else {
+            press_Key(kbd_fd_arr[idx], Caps.Key_val, Caps.Key_str);
+            press_Key(kbd_fd_arr[idx], Caps.Key_val, Caps.Key_str);
         }
+        set_LED(kbd_fd_arr[idx], Caps.Led_val, Caps.Led_str, Caps.newState);
 
-        set_LED(kbd_fd_arr[idx], &Caps);
-        set_LED(kbd_fd_arr[idx], &Num);
-        set_LED(kbd_fd_arr[idx], &Scroll);
 
-        if (loglevel < LOG_FATAL) {
-            log_info("After set LED...");
-            show_kbd_curr_state(kbd_fd_arr[idx], &Caps, &Num, &Scroll);
+        curr_state = get_LED_state(kbd_fd_arr[idx], Num.Led_val, Num.Led_str);
+        if (Num.newState == NOT_DEF)
+            Num.newState = curr_state;
+
+        if (curr_state != Num.newState) {
+            press_Key(kbd_fd_arr[idx], Num.Key_val, Num.Key_str);
+        } else {
+            press_Key(kbd_fd_arr[idx], Num.Key_val, Num.Key_str);
+            press_Key(kbd_fd_arr[idx], Num.Key_val, Num.Key_str);
         }
+        set_LED(kbd_fd_arr[idx], Num.Led_val, Num.Led_str, Num.newState);
 
-        close (kbd_fd_arr[idx]);
+
+        curr_state = get_LED_state(kbd_fd_arr[idx], Scroll.Led_val, Scroll.Led_str);
+        if (Scroll.newState == NOT_DEF)
+            Scroll.newState = curr_state;
+
+        if (curr_state != Scroll.newState) {
+            press_Key(kbd_fd_arr[idx], Scroll.Key_val, Scroll.Key_str);
+        } else {
+            press_Key(kbd_fd_arr[idx], Scroll.Key_val, Scroll.Key_str);
+            press_Key(kbd_fd_arr[idx], Scroll.Key_val, Scroll.Key_str);
+        }
+        set_LED(kbd_fd_arr[idx], Scroll.Led_val, Scroll.Led_str, Scroll.newState);
+
+
+        //press_Key(kbd_fd_arr[idx], KEY_ENTER, "KEY_ENTER");
     }
+
+    if (loglevel < LOG_FATAL) {
+        log_info("After set LED...");
+        for (int idx=0; idx < kbd_in_system; idx++) {
+            usleep(20000);
+            show_kbd_curr_state(kbd_fd_arr[idx], &Caps, &Num, &Scroll);
+        }
+    }
+
+    for (int idx=0; idx < kbd_in_system; idx++)
+        close (kbd_fd_arr[idx]);
 
     return 0;
 }
