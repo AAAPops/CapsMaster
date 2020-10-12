@@ -35,13 +35,27 @@ static int name_filter(const struct dirent *dir) {
 }
 
 
+/*!
+ * @param byte_arr bytes in memory
+ * @param bit_num bit number in byte_arr
+ *
+ * @return  0 Bit set to 0
+ * @return  1 Bit set to 1
+ */
 static int bit_check_in_bitarr(uint8_t* byte_arr, uint32_t bit_num) {
 
     return BIT_CHECK(byte_arr[bit_num/8], bit_num%8);
 }
 
 
+/*!
+ * @return  0 LED is OFF
+ * @return  1 LED is ON
+ * @return -1 system call Error
+ */
 int get_LED_state (int fd, int led_val, char* led_name) {
+
+    log_trace("%s()", __FUNCTION__ );
 
     uint8_t ev_led__bitarr[EV_LED__BYTE_MAX];
     int curr_state;
@@ -53,7 +67,7 @@ int get_LED_state (int fd, int led_val, char* led_name) {
     }
 
     curr_state = bit_check_in_bitarr(ev_led__bitarr, led_val);
-    log_trace("\t '%s' is '%s' \n", led_name, LED_state[curr_state]);
+    log_trace("\t'%s' is '%s'", led_name, LED_state[curr_state]);
     if (curr_state == 1)
         return 1;
     else
@@ -61,34 +75,42 @@ int get_LED_state (int fd, int led_val, char* led_name) {
 }
 
 
-//--------------//--------------//--------------//--------------//
+/*!
+ * @return  0 if LED present on keyboard
+ * @return  1 if NOT present on keyboard
+ * @return -1 system call Error
+ */
 int is_LED_on_kbd(int fd, int led_val, char* led_name)
 {
+    log_trace("%s()", __FUNCTION__ );
+
     uint8_t ev_type_bitarr[EV_TYPE_BYTE_MAX];
     uint8_t ev_led__bitarr[EV_LED__BYTE_MAX];
-
 
     if (ioctl(fd, EVIOCGBIT(0, sizeof(ev_type_bitarr)), ev_type_bitarr) < 0) {
         log_warn("ioctl(EVIOCGBIT:0)");
         return -1;
     }
 
-    if( bit_check_in_bitarr(ev_type_bitarr, EV_LED) ) {
-        log_trace("\t EV_LED device found!!!");
-        memset(ev_led__bitarr, 0, sizeof(ev_led__bitarr));
+    if( ! bit_check_in_bitarr(ev_type_bitarr, EV_LED) ) {
+        log_trace("\tEV_LED device Not found!");
+        return 1;
+    }
 
-        if( ioctl(fd, EVIOCGBIT(EV_LED, sizeof(ev_led__bitarr)), ev_led__bitarr) < 0 ) {
-            log_warn("ioctl(EVIOCGBIT:EV_LED)");
-            return -1;
-        }
 
-        if( bit_check_in_bitarr(ev_led__bitarr, led_val) ) {
-            log_trace("\t '%s' device found!!!", led_name);
-            return 1;
-        } else {
-            log_trace("\t '%s' device not found!!!", led_name);
-            return -1;
-        }
+    memset(ev_led__bitarr, 0, sizeof(ev_led__bitarr));
+
+    if( ioctl(fd, EVIOCGBIT(EV_LED, sizeof(ev_led__bitarr)), ev_led__bitarr) < 0 ) {
+        log_warn("ioctl(EVIOCGBIT:EV_LED)");
+        return -1;
+    }
+
+    if( bit_check_in_bitarr(ev_led__bitarr, led_val) ) {
+        log_trace("\t'%s' found!", led_name);
+        return 0;
+    } else {
+        log_trace("\t'%s' not presen!", led_name);
+        return 1;
     }
 }
 
@@ -130,8 +152,14 @@ int set_LED(int fd, int led_val, char* led_name, int led_state) {
 }
 
 
-//--------------//--------------//--------------//--------------//
-int find_all_keyboards(int *kbd_fd_arr, struct VirtLed *Caps_inst){
+/*!
+ * @return >= 0 Number of keyboard present in system
+ * @return -1 System call error
+ */
+int find_all_keyboards(int *kbd_fd_arr, struct VirtLed *CapsInst,
+                       struct VirtLed *NumInst, struct VirtLed *ScrollInst){
+
+    log_trace("%s()", __FUNCTION__ );
 
     // Array that has all file's name in dir
     struct dirent **namelist;
@@ -158,16 +186,29 @@ int find_all_keyboards(int *kbd_fd_arr, struct VirtLed *Caps_inst){
         tmp_fd = open(file_long_name, O_RDWR);
         if (tmp_fd < 0) {
             log_warn("Can not open device: %s", file_long_name);
-        }
-
-
-        if ( is_LED_on_kbd(tmp_fd, Caps_inst->Led_val, Caps_inst->Led_str) ) {
-            kbd_fd_arr[kbd_fd_count] = tmp_fd;
-            kbd_fd_count++;
+            close(tmp_fd);
             continue;
         }
 
-        close(tmp_fd);
+
+        if ( is_LED_on_kbd(tmp_fd, CapsInst->Led_val, CapsInst->Led_str) ) {
+            close(tmp_fd);
+            continue;
+        }
+
+        if ( is_LED_on_kbd(tmp_fd, NumInst->Led_val, NumInst->Led_str) ) {
+            close(tmp_fd);
+            continue;
+        }
+
+        if ( is_LED_on_kbd(tmp_fd, ScrollInst->Led_val, ScrollInst->Led_str) ) {
+            close(tmp_fd);
+            continue;
+        }
+
+        kbd_fd_arr[kbd_fd_count] = tmp_fd;
+        kbd_fd_count++;
+        log_trace("\tDevice '%s' is a keyboard [fd: %d]\n", file_long_name, tmp_fd);
     }
 
     for (idx = 0; idx < dev_n; idx++)
@@ -178,36 +219,35 @@ int find_all_keyboards(int *kbd_fd_arr, struct VirtLed *Caps_inst){
 }
 
 
+/*!
+ * @return 0 OK
+ * @return -1 System call Error
+ */
 int show_kbd_curr_state(int fd, struct VirtLed *Caps_inst,
         struct VirtLed *Num_inst, struct VirtLed *Scroll_inst) {
 
     char kbd_name[256]= "Unknown type";
     int tmp_state;
 
-    static char LED_absent[] = "---";
+    //static char LED_absent[] = "---";
     char *curr_caps_state, *curr_num_state, *curr_scroll_state;
 
     if(ioctl(fd, EVIOCGNAME(sizeof(kbd_name)), kbd_name) < 0) {
         log_fatal("ioctl(EVIOCGNAME)");
+        return -1;
     }
 
-    if ( is_LED_on_kbd(fd, Caps_inst->Led_val, Caps_inst->Led_str) ) {
-        tmp_state = get_LED_state (fd, Caps_inst->Led_val, Caps_inst->Led_str);
-        curr_caps_state = LED_state[tmp_state];
-    } else
-        curr_caps_state = LED_absent;
 
-    if ( is_LED_on_kbd(fd, Num_inst->Led_val, Num_inst->Led_str) ) {
-        tmp_state = get_LED_state (fd, Num_inst->Led_val, Num_inst->Led_str);
-        curr_num_state = LED_state[tmp_state];
-    } else
-        curr_num_state = LED_absent;
+    tmp_state = get_LED_state(fd, Caps_inst->Led_val, Caps_inst->Led_str);
+    curr_caps_state = LED_state[tmp_state];
 
-    if ( is_LED_on_kbd(fd, Scroll_inst->Led_val, Scroll_inst->Led_str) ) {
-        tmp_state = get_LED_state (fd, Scroll_inst->Led_val, Scroll_inst->Led_str);
-        curr_scroll_state = LED_state[tmp_state];
-    } else
-        curr_scroll_state = LED_absent;
+
+    tmp_state = get_LED_state(fd, Num_inst->Led_val, Num_inst->Led_str);
+    curr_num_state = LED_state[tmp_state];
+
+
+    tmp_state = get_LED_state(fd, Scroll_inst->Led_val, Scroll_inst->Led_str);
+    curr_scroll_state = LED_state[tmp_state];
 
     log_info("Keyboard: '%s' ===> CapsLock(%s) --- NumLock(%s) --- ScrollLock(%s)", kbd_name,
              curr_caps_state, curr_num_state, curr_scroll_state);
@@ -220,6 +260,7 @@ int show_kbd_curr_state(int fd, struct VirtLed *Caps_inst,
 int main(int argc, char **argv) {
 
     log_set_level(LOG_FATAL);
+    loglevel = NOT_DEF;
     int show_kbd_info = -1;
 
     struct VirtLed Caps = {.Led_val = LED_CAPSL, .Led_str = "CapsLock",
@@ -245,13 +286,14 @@ int main(int argc, char **argv) {
     if (Scroll.newState != NOT_DEF)
         log_info("app option: Set %s LED to '%s'", Scroll.Led_str, LED_state[Scroll.newState]);
     if (show_kbd_info == 1) {
-        log_set_level(LOG_INFO);
+        if (loglevel == NOT_DEF)
+            log_set_level(LOG_INFO);
         log_info("app option: '--info' route", show_kbd_info);
     }
     //------------------------------------------
 
 
-    kbd_in_system = find_all_keyboards(kbd_fd_arr, &Caps);
+    kbd_in_system = find_all_keyboards(kbd_fd_arr, &Caps, &Num, &Scroll);
     if (kbd_in_system == 0 ) {
         log_fatal("There is no keyboard attached to the computer!!!");
         return 0;
@@ -259,6 +301,7 @@ int main(int argc, char **argv) {
     log_info("Found '%d' keyboard(s) in the system", kbd_in_system);
     for (int idx=0; idx < kbd_in_system; idx++)
         log_trace("kbd fd: %d", kbd_fd_arr[idx]);
+
 
 
     /* Show all info about keyboard */
@@ -321,7 +364,7 @@ int main(int argc, char **argv) {
         //press_Key(kbd_fd_arr[idx], KEY_ENTER, "KEY_ENTER");
     }
 
-    if (loglevel < LOG_FATAL) {
+    if (loglevel >= LOG_TRACE && loglevel <= LOG_INFO) {
         log_info("After set LED...");
         for (int idx=0; idx < kbd_in_system; idx++) {
             usleep(20000);
