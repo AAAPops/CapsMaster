@@ -1,4 +1,29 @@
-### capsmaster
+##### capsmaster
+
+Simple CLI utility that allows to switch On/Off CapsLock, NumLock, ScrollLock and LEDs to appropriate state 
+on all keyboards attached to computer.
+
+No depends on build:
+
+```bash
+$ mkdir build && cd build
+$ cmake ../
+$ make
+
+# ./capsmaster --info
+# /capsmaster --numlock on  --scrolllock off
+```
+
+There are two condition to successful run:  
+
+1. Keyboard(s) is a device from `/dev/input/event*` 
+2. You need super user privilege 
+
+####### Thanks for the author of the best [log system](https://github.com/rxi/log.c)
+
+
+##### The same in Russian
+
 Простая консольная утилита позволяющая переключать клавиши CapsLock, NumLock и ScrollLock в нужное состояние.
 
 Для работы необходимы два условия:
